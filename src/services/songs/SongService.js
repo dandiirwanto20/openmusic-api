@@ -3,11 +3,12 @@ const { nanoid } = require('nanoid');
 const { Pool } = require('pg');
 const NotFoundError = require('../../exceptions/NotFoundError');
 const InvariantError = require('../../exceptions/InvariantError');
-const { mapDBToModel } = require('../../utils');
+const { mapDBToModel, mapSongList } = require('../../utils');
 
 class SongService {
-  constructor() {
+  constructor(cacheService) {
     this._pool = new Pool();
+    this._cacheService = cacheService;
   }
 
   async verifySongInDatabase(songId) {
@@ -33,18 +34,8 @@ class SongService {
     const createdAt = new Date().toISOString();
 
     const query = {
-      text: 'INSERT INTO songs VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
-      values: [
-        id,
-        title,
-        year,
-        performer,
-        genre,
-        duration,
-        albumId,
-        createdAt,
-        createdAt,
-      ],
+      text: 'INSERT INTO songs VALUES($1, $2, $3, $4, $5, $6, $7, $8, $8) RETURNING id',
+      values: [id, title, year, performer, genre, duration, albumId, createdAt],
     };
 
     const { rows } = await this._pool.query(query);
@@ -52,48 +43,33 @@ class SongService {
     if (!rows[0].id) {
       throw new InvariantError('data songs tidak dapat ditambahkan');
     }
+
+    await this._cacheService.delete('song:open-api-song');
+
     return rows[0].id;
   }
 
   async getSongs(requestParam) {
-    const { title, performer } = requestParam;
+    try {
+      const result = await this._cacheService.get('song:open-api-song');
+      return { result: JSON.parse(result), isCache: true };
+    } catch (error) {
+      const { title = '', performer = '' } = requestParam;
 
-    if (title !== undefined && performer !== undefined) {
       const query = {
         text: 'SELECT id, title, performer FROM songs WHERE title ILIKE $1 AND performer ILIKE $2',
         values: [`%${title}%`, `%${performer}%`],
       };
 
       const { rows } = await this._pool.query(query);
-      return rows;
+      const songMapped = rows.map(mapSongList);
+
+      await this._cacheService.set(
+        'song:open-api-song',
+        JSON.stringify(songMapped),
+      );
+      return songMapped;
     }
-
-    if (title) {
-      const query = {
-        text: 'SELECT id, title, performer FROM songs WHERE title ILIKE $1',
-        values: [`%${title}%`],
-      };
-
-      const { rows } = await this._pool.query(query);
-      return rows;
-    }
-
-    if (performer) {
-      const query = {
-        text: 'SELECT id, title, performer FROM songs WHERE performer ILIKE $1',
-        values: [`%${performer}%`],
-      };
-
-      const { rows } = await this._pool.query(query);
-      return rows;
-    }
-
-    const query = {
-      text: 'SELECT id, title, performer FROM songs',
-    };
-
-    const { rows } = await this._pool.query(query);
-    return rows;
   }
 
   async getSongById(id) {
@@ -131,6 +107,8 @@ class SongService {
     if (!rowCount) {
       throw new NotFoundError('Gagal memperbaharui songs. Id tidak ditemukan');
     }
+
+    await this._cacheService.delete('song:open-api-song');
   }
 
   async deleteSongById(id) {
@@ -144,6 +122,8 @@ class SongService {
     if (!rowCount) {
       throw new NotFoundError('Song gagal dihapus. Id tidak ditemukan');
     }
+
+    await this._cacheService.delete('song:open-api-song');
   }
 }
 

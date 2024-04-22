@@ -1,3 +1,4 @@
+/* eslint-disable radix */
 /* eslint-disable key-spacing */
 /* eslint-disable camelcase */
 const mapDBToModel = ({
@@ -18,9 +19,15 @@ const mapDBToModel = ({
   albumId: album_id,
 });
 
-const mapDBToAlbumSongService = ({ id, name, year }, song) => ({
+const mapDBToAlbumSongService = ({
   id,
   name,
+  cover,
+  year,
+}, song) => ({
+  id,
+  name,
+  coverUrl: cover === null ? null : cover,
   year,
   songs: song,
 });
@@ -39,9 +46,21 @@ const mapDBToPlalistActivity = (playlistId, activities) => ({
   activities,
 });
 
+const mapDBToAlbumLike = (count) => ({
+  likes: parseInt(count),
+});
+
+const mapSongList = ({ id, title, performer }) => ({
+  id,
+  title,
+  performer,
+});
+
 module.exports = {
   mapDBToModel,
   mapDBToAlbumSongService,
   mapDBToPlaylistSong,
   mapDBToPlalistActivity,
+  mapDBToAlbumLike,
+  mapSongList,
 };

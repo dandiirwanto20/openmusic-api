@@ -1,13 +1,25 @@
-/* eslint-disable import/no-extraneous-dependencies */
+/* eslint-disable no-underscore-dangle */
 require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
 const Jwt = require('@hapi/jwt');
+const config = require('./utils/config');
 
 // Albums
 const albums = require('./api/albums');
 const AlbumService = require('./services/albums/AlbumService');
 const { AlbumValidator } = require('./validator/albums');
+
+// Storage
+const StorageService = require('./services/storages/StorageService');
+
+// Cache
+const CacheService = require('./services/cache/CacheService');
+
+// Exports Plugin
+const _exports = require('./api/exports');
+const ProducerService = require('./services/exports/ProducerService');
+const { ExportPlaylistValidator } = require('./validator/exports');
 
 // Songs
 const songs = require('./api/songs');
@@ -42,23 +54,29 @@ const { CollaborationValidator } = require('./validator/collaborations');
 const ClientError = require('./exceptions/ClientError');
 
 const init = async () => {
-  const albumService = new AlbumService();
+  const cacheService = new CacheService();
+  const albumService = new AlbumService(cacheService);
   const albumValidator = new AlbumValidator();
-  const songService = new SongService();
+  const songService = new SongService(cacheService);
   const songValidator = new SongValidator();
   const userService = new UserService();
   const userValidator = new UserValidator();
   const activityService = new ActivityService();
   const collaborationService = new CollaborationService(userService);
   const collaborationValidator = new CollaborationValidator();
-  const playlistService = new PlaylistService(songService, activityService, collaborationService);
+  const playlistService = new PlaylistService(
+    songService,
+    activityService,
+    collaborationService,
+  );
   const playlistValidator = new PlaylistValidator();
   const authenticationService = new AuthenticationService();
   const authenticationValidator = new AuthenticationValidator();
+  const albumStorageService = new StorageService();
 
   const server = Hapi.server({
-    host: process.env.HOST,
-    port: process.env.PORT,
+    host: config.app.host,
+    port: config.app.port,
     routes: {
       cors: {
         origin: ['*'],
@@ -92,7 +110,8 @@ const init = async () => {
     {
       plugin: albums,
       options: {
-        service: albumService,
+        albumService,
+        storageService: albumStorageService,
         validator: albumValidator,
       },
     },
@@ -132,6 +151,14 @@ const init = async () => {
         collaborationService,
         playlistService,
         validator: collaborationValidator,
+      },
+    },
+    {
+      plugin: _exports,
+      options: {
+        exportService: ProducerService,
+        playlistService,
+        validator: ExportPlaylistValidator,
       },
     },
   ]);

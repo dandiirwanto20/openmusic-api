@@ -8,4 +8,17 @@ const albumPayloadSchema = Joi.object({
     .required(),
 });
 
-module.exports = { albumPayloadSchema };
+const albumCoverPayloadSchema = Joi.object({
+  'content-type': Joi.string()
+    .valid(
+      'image/apng',
+      'image/avif',
+      'image/gif',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    )
+    .required(),
+}).unknown();
+
+module.exports = { albumPayloadSchema, albumCoverPayloadSchema };
